@@ -1,7 +1,4 @@
-# FS-concierge
-Finite State Security Concierge — interactive persona-routing chatbot prototype
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14,31 +11,22 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
   ═══════════════════════════════════════════════════════════════════
   1. Go to https://www.emailjs.com and create a free account
   2. "Email Services" → Add New Service → connect your Gmail
-     (sign in with the Gmail you want emails sent FROM)
-     Copy the Service ID  →  paste into EMAILJS_SERVICE_ID below
+     Copy the Service ID → paste into EMAILJS_SERVICE_ID below
 
-  3. "Email Templates" → Create New Template
-     Create TWO templates:
+  3. "Email Templates" → Create Two Templates:
 
      TEMPLATE 1 — Visitor Confirmation  (name it "visitor_confirm")
      Subject:  Your Finite State session is confirmed
      Body:
        Hi {{visitor_name}},
-
-       Your 30-minute session is confirmed for {{slot}}.
-
+       Your session is confirmed for {{slot}}.
        You will be connected with a Finite State {{specialist}}.
        A calendar invite will follow shortly.
-
-       In the meantime you can reach us at security@finitestate.io.
-
        — Finite State Security Concierge
-
-     To email:  {{visitor_email}}
-     Copy the Template ID  →  paste into EMAILJS_TEMPLATE_VISITOR below
+     To email: {{visitor_email}}
 
      TEMPLATE 2 — Internal Notification  (name it "internal_notify")
-     Subject:  New Concierge Booking: {{visitor_name}} · {{slot}}
+     Subject:  New Concierge booking — {{role}} at {{company}}
      Body:
        New booking via Finite State Security Concierge
 
@@ -51,13 +39,25 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
        Specialist: {{specialist}}
        Time:       {{slot}}
 
-     To email:  {{notify_email}}
-     Copy the Template ID  →  paste into EMAILJS_TEMPLATE_INTERNAL below
+     To email: {{notify_email}}
 
   4. "Account" → "General" → copy your Public Key
      Paste into EMAILJS_PUBLIC_KEY below
 
-  5. That's it. Both emails fire on booking confirmation.
+  5. Both emails fire on booking confirmation.
+  ═══════════════════════════════════════════════════════════════════
+
+  ═══════════════════════════════════════════════════════════════════
+  SALESFORCE WEB-TO-LEAD SETUP
+  ═══════════════════════════════════════════════════════════════════
+  1. Salesforce Setup → Web-to-Lead → Create Web-to-Lead Form
+  2. Copy your Organisation ID → paste into SF_ORG_ID below
+  3. Add two custom Lead fields in Salesforce:
+       Concierge_Branch__c  (text)
+       Concierge_Focus__c   (text)
+     Copy their field IDs (format: 00N...) → paste into
+     SF_BRANCH_FIELD and SF_FOCUS_FIELD below
+  4. Posts fire silently on booking confirm alongside EmailJS.
   ═══════════════════════════════════════════════════════════════════
 -->
 
@@ -66,7 +66,6 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 
 <!-- EmailJS SDK -->
-
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
 <style>
@@ -218,7 +217,6 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
   .td:nth-child(3){animation-delay:.44s}
   @keyframes db{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-5px);opacity:1}}
 
-  /* Resource cards */
   .res-wrap{display:flex;flex-direction:column;gap:7px;max-width:79%}
   .res-section-lbl{font-family:var(--mono);font-size:9px;font-weight:600;
     letter-spacing:.12em;text-transform:uppercase;color:var(--text2);margin-bottom:2px}
@@ -231,7 +229,6 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
     text-transform:uppercase;color:var(--text3);margin-bottom:2px}
   .res-name{font-size:12.5px;color:var(--text);line-height:1.45}
 
-  /* Booking card */
   .book-card{background:var(--bg4);border:1px solid var(--gline);
     border-radius:var(--r);padding:15px;max-width:79%}
   .book-card.am{border-color:var(--aline)}
@@ -274,7 +271,6 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
   .book-error{font-family:var(--mono);font-size:10px;color:#f87171;
     margin-top:6px;display:none}
 
-  /* Config warning banner */
   .config-warn{background:rgba(240,165,0,.1);border:1px solid var(--aline);
     border-radius:4px;padding:10px 14px;margin-bottom:14px;
     font-family:var(--mono);font-size:11px;color:var(--amber);line-height:1.55;display:none}
@@ -283,7 +279,6 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
   .foot{text-align:center;padding:16px 0 0;font-family:var(--mono);
     font-size:9px;color:var(--text3);letter-spacing:.07em;animation:up .6s .27s ease both}
 </style>
-
 </head>
 <body>
 
@@ -297,8 +292,6 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
 </header>
 
 <main class="main">
-
-  <!-- Shows if EmailJS or Anthropic API key isn't configured yet -->
 
   <div class="config-warn" id="configWarn">
     ⚠️  Setup required before sharing: add your Anthropic API key and EmailJS credentials at the top of the &lt;script&gt; block. See inline comments for instructions.
@@ -333,38 +326,48 @@ Finite State Security Concierge — interactive persona-routing chatbot prototyp
 /* ═══════════════════════════════════════════════════════════════════
    ANTHROPIC API CONFIG
    ═══════════════════════════════════════════════════════════════════
-   1. Go to https://console.anthropic.com
-   2. API Keys → Create Key → copy it
-   3. Paste it below (replaces YOUR_ANTHROPIC_API_KEY)
-
-   NOTE: This key will be visible in browser source code.
-   Fine for internal testing / demos. For production, proxy
-   the API call through a serverless function instead.
+   NOTE: Key is visible in browser source. Fine for internal POC/demo.
+   For production, proxy through a serverless function.
    ═══════════════════════════════════════════════════════════════════ */
 const ANTHROPIC_API_KEY = "YOUR_ANTHROPIC_API_KEY";
 
 /* ═══════════════════════════════════════════════════════════════════
-   EMAILJS CONFIG — paste your values here after setup
+   EMAILJS CONFIG
    ═══════════════════════════════════════════════════════════════════ */
-const EMAILJS_PUBLIC_KEY       = "YOUR_PUBLIC_KEY";        // Account > General
-const EMAILJS_SERVICE_ID       = "YOUR_SERVICE_ID";        // Email Services
-const EMAILJS_TEMPLATE_VISITOR = "YOUR_VISITOR_TEMPLATE";  // visitor_confirm template ID
-const EMAILJS_TEMPLATE_INTERNAL= "YOUR_INTERNAL_TEMPLATE"; // internal_notify template ID
-const NOTIFY_EMAIL             = "amberbogie@gmail.com";   // internal booking notification
+const EMAILJS_PUBLIC_KEY        = "YOUR_PUBLIC_KEY";
+const EMAILJS_SERVICE_ID        = "YOUR_SERVICE_ID";
+const EMAILJS_TEMPLATE_VISITOR  = "YOUR_VISITOR_TEMPLATE";
+const EMAILJS_TEMPLATE_INTERNAL = "YOUR_INTERNAL_TEMPLATE";
+const NOTIFY_EMAIL              = "SalesRep@FiniteState.IO";  // ← internal booking notification
+
+/* ═══════════════════════════════════════════════════════════════════
+   SALESFORCE WEB-TO-LEAD CONFIG
+   ═══════════════════════════════════════════════════════════════════
+   To activate:
+   1. Salesforce Setup → Web-to-Lead → Create Web-to-Lead Form
+   2. Copy your Org ID → replace YOUR_SF_ORG_ID below
+   3. Add custom Lead fields in Salesforce:
+        Concierge_Branch__c  (text)
+        Concierge_Focus__c   (text)
+      Copy their field IDs (format: 00N...) → replace the
+      SF_BRANCH_FIELD and SF_FOCUS_FIELD placeholders below
+   4. Posts fire silently alongside EmailJS on every booking.
+   ═══════════════════════════════════════════════════════════════════ */
+const SF_ORG_ID       = "YOUR_SF_ORG_ID";          // ← paste Salesforce Org ID
+const SF_ENDPOINT     = "https://webto.salesforce.com/servlet/servlet.WebToLead";
+const SF_BRANCH_FIELD = "00N_BRANCH_FIELD_ID";      // ← custom field: Concierge_Branch__c
+const SF_FOCUS_FIELD  = "00N_FOCUS_FIELD_ID";       // ← custom field: Concierge_Focus__c
+const SF_RETURL       = "https://finitestate.io";
 
 /* ═══════════════════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════════════════ */
 const CONFIGURED = EMAILJS_PUBLIC_KEY !== "YOUR_PUBLIC_KEY";
 const API_READY  = ANTHROPIC_API_KEY  !== "YOUR_ANTHROPIC_API_KEY";
+const SF_READY   = SF_ORG_ID          !== "YOUR_SF_ORG_ID";
 
-if (CONFIGURED) {
-  emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
-}
-
-if (!CONFIGURED || !API_READY) {
-  document.getElementById('configWarn').classList.add('show');
-}
+if (CONFIGURED) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+if (!CONFIGURED || !API_READY) document.getElementById('configWarn').classList.add('show');
 
 /* ═══════════════════════════════════════════════════════════════════
    STATE
@@ -386,17 +389,15 @@ function setStep(n, total) {
   document.getElementById('stepLbl').textContent = `Step ${n} of ${total}`;
   if (n > 1) document.getElementById('restartBtn').classList.add('on');
 }
-
 function setTrack(t) { document.getElementById('trackLbl').textContent = t || ''; }
-function clearIA() { document.getElementById('ia').innerHTML = ''; }
+function clearIA()   { document.getElementById('ia').innerHTML = ''; }
 
 async function type(text) {
-  const C = document.getElementById('msgs');
+  const C   = document.getElementById('msgs');
   const row = mk('div', 'msg bot');
   const av  = mk('div', 'av');  av.textContent = 'FC';
   const bub = mk('div', 'bub');
   row.appendChild(av); row.appendChild(bub); C.appendChild(row);
-
   const plain = text.replace(/<[^>]*>/g, '');
   for (let i = 0; i < plain.length; i++) {
     const ch = plain[i];
@@ -415,7 +416,7 @@ async function type(text) {
 }
 
 function showTyping() {
-  const C = document.getElementById('msgs');
+  const C   = document.getElementById('msgs');
   const row = mk('div', 'msg bot'); row.id = 'typing';
   const av  = mk('div', 'av'); av.textContent = 'FC';
   const d   = mk('div', 'tdots');
@@ -423,11 +424,10 @@ function showTyping() {
   row.appendChild(av); row.appendChild(d); C.appendChild(row);
   setTimeout(() => C.scrollTop = C.scrollHeight, 40);
 }
-
 function removeTyping() { const e = document.getElementById('typing'); if (e) e.remove(); }
 
 function userMsg(t) {
-  const C = document.getElementById('msgs');
+  const C   = document.getElementById('msgs');
   const row = mk('div', 'msg usr');
   const av  = mk('div', 'av'); av.textContent = 'YOU';
   const b   = mk('div', 'bub'); b.textContent = t;
@@ -497,15 +497,11 @@ function showFollowUp(ph, onSend) {
    CLAUDE API
    ═══════════════════════════════════════════════════════════════════ */
 async function callClaude(userText, extraSys) {
-  if (!API_READY) {
-    throw new Error('Anthropic API key not configured. Add it to ANTHROPIC_API_KEY at the top of the script.');
-  }
-
+  if (!API_READY) throw new Error('Anthropic API key not configured.');
   const sys = `You are the Finite Concierge, the authoritative security advisor for Finite State.
 Speak like a senior security engineer advising a peer. Be sharp, direct, technically credible. No fluffy marketing language, no em dashes, no bullet lists.
 Visitor: ${S.role || 'security professional'}${S.company ? ' at ' + S.company : ''}. Branch: ${S.branch}. Focus: ${S.sub || 'general'}${S.sub2 ? ', ' + S.sub2 : ''}.
 ${extraSys || ''}`;
-
   const resp = await fetch(API, {
     method: 'POST',
     headers: {
@@ -521,12 +517,10 @@ ${extraSys || ''}`;
       messages: [...S.history, { role: 'user', content: userText }]
     })
   });
-
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err?.error?.message || `API error ${resp.status}`);
   }
-
   const d = await resp.json();
   let t = d.content?.[0]?.text || '';
   t = t.replace(/\u2014/g, ',').replace(/\u2013/g, ' to ');
@@ -536,45 +530,79 @@ ${extraSys || ''}`;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   EMAIL SEND — dual fire via EmailJS
+   SALESFORCE WEB-TO-LEAD
    ═══════════════════════════════════════════════════════════════════ */
-async function sendEmails(visitorName, visitorEmail, slot, specialist) {
-  if (!CONFIGURED) {
-    console.warn('EmailJS not configured. Skipping email send.');
+async function postToSalesforce(name, email, company, role, branch, focus) {
+  if (!SF_READY) {
+    console.warn('Salesforce: placeholder org ID — skipping post. Swap SF_ORG_ID to activate.');
     return { ok: false, reason: 'not_configured' };
   }
+  const body = new URLSearchParams({
+    oid:              SF_ORG_ID,
+    retURL:           SF_RETURL,
+    first_name:       name.split(' ')[0] || name,
+    last_name:        name.split(' ').slice(1).join(' ') || '-',
+    email:            email,
+    company:          company    || 'Not provided',
+    title:            role       || 'Not provided',
+    lead_source:      'Finite Concierge',
+    [SF_BRANCH_FIELD]: branch,
+    [SF_FOCUS_FIELD]:  focus,
+  });
+  try {
+    await fetch(SF_ENDPOINT, {
+      method:  'POST',
+      mode:    'no-cors',   // Web-to-Lead doesn't return CORS headers — silent post
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    body.toString()
+    });
+    console.log('Salesforce: Lead posted —', email, '|', branch, '|', role);
+    return { ok: true };
+  } catch (err) {
+    console.error('Salesforce post error:', err);
+    return { ok: false, reason: err.message };
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EMAIL — dual fire via EmailJS + Salesforce post
+   ═══════════════════════════════════════════════════════════════════ */
+async function sendEmails(visitorName, visitorEmail, slot, specialist) {
+  const focus = [S.sub, S.sub2].filter(Boolean).join(' / ');
 
   const sharedParams = {
     visitor_name:  visitorName,
     visitor_email: visitorEmail,
-    company:       S.company  || 'Not provided',
-    role:          S.role     || 'Not provided',
+    company:       S.company || 'Not provided',
+    role:          S.role    || 'Not provided',
     branch:        S.branch,
-    focus:         [S.sub, S.sub2].filter(Boolean).join(' / '),
+    focus:         focus,
     specialist,
     slot,
     notify_email:  NOTIFY_EMAIL,
   };
 
-  try {
-    // Fire both simultaneously — visitor confirmation + internal notification
-    await Promise.all([
-      emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_VISITOR,
-        { ...sharedParams, to_email: visitorEmail }
-      ),
-      emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_INTERNAL,
-        { ...sharedParams, to_email: NOTIFY_EMAIL }
-      ),
-    ]);
-    return { ok: true };
-  } catch (err) {
-    console.error('EmailJS error:', err);
-    return { ok: false, reason: err.text || err.message || 'unknown' };
+  // Fire EmailJS + Salesforce in parallel
+  const results = await Promise.allSettled([
+    CONFIGURED
+      ? Promise.all([
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_VISITOR,  { ...sharedParams, to_email: visitorEmail }),
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_INTERNAL, { ...sharedParams, to_email: NOTIFY_EMAIL }),
+        ])
+      : Promise.resolve('not_configured'),
+    postToSalesforce(visitorName, visitorEmail, S.company, S.role, S.branch, focus),
+  ]);
+
+  const emailOk = results[0].status === 'fulfilled';
+  const sfOk    = results[1].status === 'fulfilled' && results[1].value?.ok;
+
+  if (SF_READY) {
+    console.log('Salesforce post:', sfOk ? 'success' : 'failed');
   }
+
+  if (!CONFIGURED) return { ok: false, reason: 'not_configured' };
+  if (!emailOk)    return { ok: false, reason: results[0].reason?.text || 'email_error' };
+  return { ok: true };
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -603,10 +631,8 @@ function showResources(branch) {
   const row  = mk('div', 'msg bot');
   const av   = mk('div', 'av'); av.textContent = 'FC';
   const wrap = mk('div', 'res-wrap');
-
-  const lbl = mk('div', 'res-section-lbl'); lbl.textContent = 'Relevant Resources';
+  const lbl  = mk('div', 'res-section-lbl'); lbl.textContent = 'Relevant Resources';
   wrap.appendChild(lbl);
-
   RESOURCES[branch].forEach(r => {
     const a  = mk('a', 'res-card'); a.href = r.url; a.target = '_blank'; a.rel = 'noopener';
     const ic = mk('span', 'res-icon'); ic.textContent = r.icon;
@@ -617,7 +643,6 @@ function showResources(branch) {
     a.appendChild(ic); a.appendChild(info);
     wrap.appendChild(a);
   });
-
   row.appendChild(av); row.appendChild(wrap);
   C.appendChild(row);
   setTimeout(() => C.scrollTop = C.scrollHeight, 50);
@@ -643,9 +668,9 @@ function timeSlots() {
 }
 
 function showBookCard(specialist, colorCls) {
-  const C   = document.getElementById('msgs');
-  const row = mk('div', 'msg bot');
-  const av  = mk('div', 'av'); av.textContent = 'FC';
+  const C    = document.getElementById('msgs');
+  const row  = mk('div', 'msg bot');
+  const av   = mk('div', 'av'); av.textContent = 'FC';
   const card = mk('div', `book-card${colorCls ? ' ' + colorCls : ''}`);
 
   card.innerHTML = `
@@ -676,7 +701,6 @@ function showBookCard(specialist, colorCls) {
   const checkReady = () => {
     submitBtn.disabled = !(nameInp.value.trim() && emailInp.value.trim() && pickedSlot);
   };
-
   nameInp.addEventListener('input', checkReady);
   emailInp.addEventListener('input', checkReady);
 
@@ -694,7 +718,7 @@ function showBookCard(specialist, colorCls) {
     const email = emailInp.value.trim();
     if (!name || !email || !pickedSlot) return;
 
-    submitBtn.disabled = true;
+    submitBtn.disabled    = true;
     submitBtn.textContent = 'Sending...';
 
     const result = await sendEmails(name, email, pickedSlot, specialist);
@@ -715,9 +739,8 @@ function showBookCard(specialist, colorCls) {
       document.getElementById('stepLbl').textContent = 'Complete';
 
     } else {
-      // Email failed but booking is still noted — show inline error, don't block the user
-      submitBtn.textContent = 'Confirmed';
-      errEl.style.display = 'block';
+      submitBtn.textContent  = 'Confirmed';
+      errEl.style.display    = 'block';
       clearIA();
       userMsg(`${name} · ${pickedSlot}`);
       await sleep(400);
@@ -737,11 +760,10 @@ async function start() {
   await sleep(450);
   await type("Welcome to Finite State. How can we help you accelerate your product security today?");
   await sleep(140);
-
   showOpts([
-    { label: '🔧  Secure devices we build',           value: 'builder',    cls: '' },
-    { label: '🌐  Assess devices we deploy',           value: 'deployer',   cls: 'am' },
-    { label: '📋  Streamline regulatory compliance',   value: 'compliance', cls: 'pu' },
+    { label: '🔧  Secure devices we build',         value: 'builder',    cls: '' },
+    { label: '🌐  Assess devices we deploy',         value: 'deployer',   cls: 'am' },
+    { label: '📋  Streamline regulatory compliance', value: 'compliance', cls: 'pu' },
   ], async sel => {
     S.branch = sel.value;
     const labels = { builder: 'Device Builder', deployer: 'Asset Owner / Deployer', compliance: 'Compliance Officer' };
@@ -751,12 +773,10 @@ async function start() {
   });
 }
 
-/* Step 2: Role */
 async function askRole() {
   setStep(2, 6);
   await sleep(700);
   await type("What is your role?");
-
   const roleOpts = {
     builder: [
       { label: 'Product Security Engineer / Manager', value: 'Product Security Engineer' },
@@ -765,19 +785,18 @@ async function askRole() {
       { label: 'Engineering Leader / CTO',            value: 'Engineering Leader' },
     ],
     deployer: [
-      { label: 'CISO / VP of Security',               value: 'CISO', cls: 'am' },
-      { label: 'IT / Network Security Manager',       value: 'IT Security Manager', cls: 'am' },
+      { label: 'CISO / VP of Security',               value: 'CISO',                    cls: 'am' },
+      { label: 'IT / Network Security Manager',       value: 'IT Security Manager',     cls: 'am' },
       { label: 'Risk and Compliance Lead',            value: 'Risk and Compliance Lead', cls: 'am' },
-      { label: 'Engineering Leader / CTO',            value: 'Engineering Leader', cls: 'am' },
+      { label: 'Engineering Leader / CTO',            value: 'Engineering Leader',       cls: 'am' },
     ],
     compliance: [
       { label: 'Regulatory Affairs Manager',          value: 'Regulatory Affairs Manager', cls: 'pu' },
-      { label: 'CISO / VP of Security',               value: 'CISO', cls: 'pu' },
-      { label: 'Product Security / Quality Lead',     value: 'Product Security Lead', cls: 'pu' },
-      { label: 'Legal / General Counsel',             value: 'Legal Counsel', cls: 'pu' },
+      { label: 'CISO / VP of Security',               value: 'CISO',                       cls: 'pu' },
+      { label: 'Product Security / Quality Lead',     value: 'Product Security Lead',      cls: 'pu' },
+      { label: 'Legal / General Counsel',             value: 'Legal Counsel',              cls: 'pu' },
     ],
   };
-
   showOpts(roleOpts[S.branch], async sel => {
     S.role = sel.value;
     userMsg(sel.label);
@@ -785,41 +804,33 @@ async function askRole() {
   });
 }
 
-/* Step 3: Company */
 async function askCompany() {
   setStep(3, 6);
   await sleep(700);
   await type("And your company? It helps me pull the right context.");
-
   showTextInput('Company name...', 'Skip for now',
     async v => { S.company = v; userMsg(v); await branchSub(); },
     async () => { S.company = null; await branchSub(); }
   );
 }
 
-/* Step 4: Sub-branch */
 async function branchSub() {
   setStep(4, 6);
   await sleep(700);
-
   if (S.branch === 'builder') {
     await type("What is your biggest bottleneck right now?");
     showOpts([
-      { label: 'SBOM Generation and Management',      value: 'SBOM generation' },
-      { label: 'Deep Binary and Firmware Analysis',   value: 'binary analysis' },
-      { label: 'CI/CD Pipeline Integration',          value: 'CI/CD integration' },
+      { label: 'SBOM Generation and Management',     value: 'SBOM generation' },
+      { label: 'Deep Binary and Firmware Analysis',  value: 'binary analysis' },
+      { label: 'CI/CD Pipeline Integration',         value: 'CI/CD integration' },
     ], async sel => { S.sub = sel.value; userMsg(sel.label); await painPointAI(); });
-  }
-
-  else if (S.branch === 'deployer') {
+  } else if (S.branch === 'deployer') {
     await type("What is your primary concern right now?");
     showOpts([
       { label: 'Vendor Risk Management',                   value: 'vendor risk management',   cls: 'am' },
       { label: 'Vulnerability Monitoring and Mitigation',  value: 'vulnerability monitoring', cls: 'am' },
     ], async sel => { S.sub = sel.value; userMsg(sel.label); await painPointAI(); });
-  }
-
-  else if (S.branch === 'compliance') {
+  } else if (S.branch === 'compliance') {
     await type("Which mandate are you solving for right now?");
     showOpts([
       { label: 'FDA Medical Device Regulations (524B)', value: 'FDA 524B',  cls: 'pu' },
@@ -848,29 +859,23 @@ async function complianceDepth() {
   showOpts(subOpts[S.sub], async sel => { S.sub2 = sel.value; userMsg(sel.label); await painPointAI(); });
 }
 
-/* Step 5: AI pain point assessment + confirm loop */
 async function painPointAI() {
   setStep(5, 6);
   await sleep(600);
   showTyping();
-
   let reply;
   try {
     reply = await callClaude(
       `In 2 short paragraphs, describe the specific risk this person is carrying right now based on their profile. Then in one sentence explain how Finite State resolves it. Be precise and technically grounded. Keep the total under 90 words. End with a new line then ask: "Does this capture what you are dealing with, or should we adjust?"`,
       `No bullet lists. No em dashes. No fluffy language. Write as a peer.`
     );
-  } catch (e) {
-    reply = fallbackPain();
-  }
-
+  } catch (e) { reply = fallbackPain(); }
   removeTyping();
   await type(reply);
   await sleep(200);
-
   showOpts([
-    { label: 'Yes, that is accurate',       value: 'confirmed' },
-    { label: 'Not quite, let me clarify',   value: 'redirect' },
+    { label: 'Yes, that is accurate',     value: 'confirmed' },
+    { label: 'Not quite, let me clarify', value: 'redirect'  },
   ], async sel => {
     userMsg(sel.label);
     if (sel.value === 'confirmed') await goToResources();
@@ -908,8 +913,8 @@ async function askClarification() {
     await type(reply);
     await sleep(200);
     showOpts([
-      { label: 'Yes, that is right',       value: 'confirmed' },
-      { label: 'Let me clarify further',   value: 'redirect' },
+      { label: 'Yes, that is right',     value: 'confirmed' },
+      { label: 'Let me clarify further', value: 'redirect'  },
     ], async sel => {
       userMsg(sel.label);
       if (sel.value === 'confirmed') await goToResources();
@@ -918,7 +923,6 @@ async function askClarification() {
   });
 }
 
-/* Step 6: Resources + book offer */
 async function goToResources() {
   setStep(6, 6);
   await sleep(700);
@@ -928,13 +932,11 @@ async function goToResources() {
   await sleep(700);
   await type("Want to go deeper? I can put you directly on the calendar with the right specialist. No SDR queue.");
   await sleep(200);
-
-  const colorCls  = { builder: '', deployer: 'am', compliance: 'pu' };
-  const specialist= { builder: 'Product Security Engineer', deployer: 'Asset Risk Specialist', compliance: 'Compliance Specialist' };
-
+  const colorCls   = { builder: '', deployer: 'am', compliance: 'pu' };
+  const specialist = { builder: 'Product Security Engineer', deployer: 'Asset Risk Specialist', compliance: 'Compliance Specialist' };
   showOpts([
-    { label: 'Yes, book a session',                   value: 'book', cls: S.branch === 'deployer' ? 'am' : S.branch === 'compliance' ? 'pu' : '' },
-    { label: 'Not right now, I have what I need',     value: 'done' },
+    { label: 'Yes, book a session',               value: 'book', cls: S.branch === 'deployer' ? 'am' : S.branch === 'compliance' ? 'pu' : '' },
+    { label: 'Not right now, I have what I need', value: 'done' },
   ], async sel => {
     userMsg(sel.label);
     clearIA();
@@ -949,7 +951,6 @@ async function goToResources() {
   });
 }
 
-/* ── restart ─────────────────────────────────────────────────────── */
 function restart() {
   S = { branch: null, sub: null, sub2: null, role: null, company: null, history: [] };
   document.getElementById('msgs').innerHTML = '';
@@ -961,6 +962,5 @@ function restart() {
 
 window.addEventListener('load', () => setTimeout(start, 400));
 </script>
-
 </body>
 </html>
